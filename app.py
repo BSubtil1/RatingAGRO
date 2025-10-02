@@ -19,10 +19,16 @@ def create_pdf_report(dados_fazenda, indice_final, scores_detalhados, classe, de
     """Gera o laudo da análise em um arquivo PDF."""
     pdf = FPDF()
     pdf.add_page()
+    
+    # Adiciona uma fonte que suporta caracteres Unicode (essencial para acentos)
+    # A FPDF já vem com algumas fontes padrão que funcionam bem.
     pdf.set_font("Arial", "B", 16)
     
     # Cabeçalho
-    pdf.cell(0, 10, f"Laudo de Viabilidade - {dados_fazenda['nome_fazenda']}", 0, 1, "C")
+    # Usamos .encode('latin-1', 'replace').decode('latin-1') para garantir compatibilidade
+    safe_nome_fazenda = dados_fazenda['nome_fazenda'].encode('latin-1', 'replace').decode('latin-1')
+    pdf.cell(0, 10, f"Laudo de Viabilidade - {safe_nome_fazenda}", 0, 1, "C")
+    
     pdf.set_font("Arial", "", 10)
     pdf.cell(0, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", 0, 1, "C")
     pdf.ln(10)
@@ -31,17 +37,20 @@ def create_pdf_report(dados_fazenda, indice_final, scores_detalhados, classe, de
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, "1. Resumo da Avaliacao", 0, 1)
     pdf.set_font("Arial", "", 10)
-    pdf.multi_cell(0, 5, f"Indice de Viabilidade Final: {indice_final:.2f} / 10")
-    pdf.multi_cell(0, 5, f"Classificacao do Ativo: {classe}")
-    pdf.multi_cell(0, 5, f"Recomendacao: {desc_classe}")
-    pdf.ln(10)
 
+    # CORREÇÃO APLICADA AQUI: Codificamos cada string antes de passá-la para a célula
+    pdf.multi_cell(0, 5, f"Indice de Viabilidade Final: {indice_final:.2f} / 10".encode('latin-1', 'replace').decode('latin-1'))
+    pdf.multi_cell(0, 5, f"Classificacao do Ativo: {classe}".encode('latin-1', 'replace').decode('latin-1'))
+    pdf.multi_cell(0, 5, f"Recomendacao: {desc_classe}".encode('latin-1', 'replace').decode('latin-1'))
+    pdf.ln(10)
+    
     # Detalhamento dos Scores
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, "2. Pontuacoes por Categoria", 0, 1)
     pdf.set_font("Arial", "", 10)
     for categoria, score in scores_detalhados.items():
-        pdf.multi_cell(0, 5, f"- {categoria.replace('_', ' ').title()}: {score:.1f} / 10")
+        linha = f"- {categoria.replace('_', ' ').title()}: {score:.1f} / 10"
+        pdf.multi_cell(0, 5, linha.encode('latin-1', 'replace').decode('latin-1'))
     pdf.ln(10)
     
     # Dados de Entrada
@@ -49,11 +58,12 @@ def create_pdf_report(dados_fazenda, indice_final, scores_detalhados, classe, de
     pdf.cell(0, 10, "3. Dados de Entrada Utilizados", 0, 1)
     pdf.set_font("Arial", "", 10)
     for chave, valor in dados_fazenda.items():
-         if chave not in ['latitude', 'longitude']: # Nao precisa mostrar lat/lon no PDF
-             pdf.multi_cell(0, 5, f"- {chave.replace('_', ' ').title()}: {valor}")
+         if chave not in ['latitude', 'longitude']:
+             linha = f"- {chave.replace('_', ' ').title()}: {valor}"
+             pdf.multi_cell(0, 5, linha.encode('latin-1', 'replace').decode('latin-1'))
     pdf.ln(10)
     
-    # Salva o PDF em memória
+    # Alteração principal: Retorna os bytes diretamente, sem a codificação extra no final
     return pdf.output(dest='S').encode('latin-1')
 
 
