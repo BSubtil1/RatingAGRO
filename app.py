@@ -15,57 +15,64 @@ st.set_page_config(
 
 # --- Funções Auxiliares ---
 
+# app.py -> DENTRO DA FUNÇÃO create_pdf_report
+
 def create_pdf_report(dados_fazenda, indice_final, scores_detalhados, classe, desc_classe):
-    """Gera o laudo da análise em um arquivo PDF."""
+    """Gera o laudo da análise em um arquivo PDF - Versão 3.0 com Fonte Embutida."""
     pdf = FPDF()
     pdf.add_page()
     
-    # Adiciona uma fonte que suporta caracteres Unicode (essencial para acentos)
-    # A FPDF já vem com algumas fontes padrão que funcionam bem.
-    pdf.set_font("Arial", "B", 16)
+    # PASSO CHAVE: Adiciona a fonte que subimos para o GitHub
+    # O 'uni=True' habilita o suporte completo a caracteres Unicode.
+    try:
+        pdf.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
+    except RuntimeError as e:
+        # Se estiver rodando localmente sem a fonte, usa uma padrão e avisa.
+        st.error(f"Erro ao carregar a fonte: {e}. Certifique-se que o arquivo 'DejaVuSans.ttf' está no repositório.")
+        pdf.set_font("Arial", "", 10)
+
+    # Usa a nova fonte para todo o documento.
+    pdf.set_font("DejaVu", "B", 16)
     
     # Cabeçalho
-    # Usamos .encode('latin-1', 'replace').decode('latin-1') para garantir compatibilidade
-    safe_nome_fazenda = dados_fazenda['nome_fazenda'].encode('latin-1', 'replace').decode('latin-1')
-    pdf.cell(0, 10, f"Laudo de Viabilidade - {safe_nome_fazenda}", 0, 1, "C")
+    pdf.cell(0, 10, f"Laudo de Viabilidade - {dados_fazenda['nome_fazenda']}", 0, 1, "C")
     
-    pdf.set_font("Arial", "", 10)
+    pdf.set_font("DejaVu", "", 10)
     pdf.cell(0, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", 0, 1, "C")
     pdf.ln(10)
 
     # Resumo Geral
-    pdf.set_font("Arial", "B", 12)
+    pdf.set_font("DejaVu", "B", 12)
     pdf.cell(0, 10, "1. Resumo da Avaliacao", 0, 1)
-    pdf.set_font("Arial", "", 10)
-
-    # CORREÇÃO APLICADA AQUI: Codificamos cada string antes de passá-la para a célula
-    pdf.multi_cell(0, 5, f"Indice de Viabilidade Final: {indice_final:.2f} / 10".encode('latin-1', 'replace').decode('latin-1'))
-    pdf.multi_cell(0, 5, f"Classificacao do Ativo: {classe}".encode('latin-1', 'replace').decode('latin-1'))
-    pdf.multi_cell(0, 5, f"Recomendacao: {desc_classe}".encode('latin-1', 'replace').decode('latin-1'))
+    pdf.set_font("DejaVu", "", 10)
+    
+    # REMOVEMOS O '.encode().decode()' - não é mais necessário.
+    pdf.multi_cell(0, 5, f"Indice de Viabilidade Final: {indice_final:.2f} / 10")
+    pdf.multi_cell(0, 5, f"Classificacao do Ativo: {classe}")
+    pdf.multi_cell(0, 5, f"Recomendacao: {desc_classe}")
     pdf.ln(10)
     
     # Detalhamento dos Scores
-    pdf.set_font("Arial", "B", 12)
+    pdf.set_font("DejaVu", "B", 12)
     pdf.cell(0, 10, "2. Pontuacoes por Categoria", 0, 1)
-    pdf.set_font("Arial", "", 10)
+    pdf.set_font("DejaVu", "", 10)
     for categoria, score in scores_detalhados.items():
         linha = f"- {categoria.replace('_', ' ').title()}: {score:.1f} / 10"
-        pdf.multi_cell(0, 5, linha.encode('latin-1', 'replace').decode('latin-1'))
+        pdf.multi_cell(0, 5, linha)
     pdf.ln(10)
     
     # Dados de Entrada
-    pdf.set_font("Arial", "B", 12)
+    pdf.set_font("DejaVu", "B", 12)
     pdf.cell(0, 10, "3. Dados de Entrada Utilizados", 0, 1)
-    pdf.set_font("Arial", "", 10)
+    pdf.set_font("DejaVu", "", 10)
     for chave, valor in dados_fazenda.items():
          if chave not in ['latitude', 'longitude']:
              linha = f"- {chave.replace('_', ' ').title()}: {valor}"
-             pdf.multi_cell(0, 5, linha.encode('latin-1', 'replace').decode('latin-1'))
+             pdf.multi_cell(0, 5, linha)
     pdf.ln(10)
     
-    # Alteração principal: Retorna os bytes diretamente, sem a codificação extra no final
-    return pdf.output(dest='S').encode('latin-1')
-
+    # Retorna os bytes diretamente.
+    return pdf.output()
 
 # --- Título e Descrição ---
 st.title("🗺️ AgroScore Validator 2.0")
