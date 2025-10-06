@@ -8,11 +8,11 @@ from scoring_engine import calcular_indice_viabilidade, PESOS, JUSTIFICATIVAS_PE
 from geolocation_service import find_all_nearest_pois, find_nearest_hub
 
 # --- Configuração da Página ---
-st.set_page_config(page_title="AgroScore Validator 3.3", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="AgroScore Validator 3.4", page_icon="🛰️", layout="wide")
 
 # --- Título e Descrição ---
-st.title("🛰️ AgroScore Validator 3.3")
-st.markdown("Plataforma com **busca geográfica aprimorada** para Silos Graneleiros, Cidades e Rodovias.")
+st.title("🛰️ AgroScore Validator 3.4")
+st.markdown("Plataforma com **mapa logístico completo**, mostrando as rotas para Silos, Cidades e Rodovias.")
 
 # --- Barra Lateral de Entradas (Inputs) ---
 with st.sidebar:
@@ -46,7 +46,6 @@ with st.sidebar:
         min_value=0.0,
         value=float(st.session_state.get('pois', {}).get('rodovia', {}).get('distancia', 25.0))
     )
-    # MUDANÇA AQUI: Texto e chave atualizados para 'silo'
     dist_silo_km = st.number_input(
         "Distância do Armazém Graneleiro (km)",
         min_value=0.0, 
@@ -111,29 +110,30 @@ if analisar:
         if 'pois' in st.session_state:
             pois = st.session_state.pois
             
-            # MUDANÇA AQUI: Linha para Silo/Graneleiro (Verde)
+            # Linha para Silo/Graneleiro (Amarelo)
+            # CORREÇÃO APLICADA AQUI: VOLTAMOS PARA A COR AMARELA E ÍCONE DE INDÚSTRIA
             if pois['silo']['coords']:
                 silo_coords = pois['silo']['coords']
                 folium.Marker(
                     silo_coords, 
-                    popup=f"🌾 **Silo/Graneleiro**: {pois['silo']['nome']} ({pois['silo']['distancia']:.1f} km)",
-                    tooltip="Silo/Graneleiro Mais Próximo",
-                    icon=folium.Icon(color='green', icon='tractor', prefix='fa')
+                    popup=f"📦 **Armazém/Silo**: {pois['silo']['nome']} ({pois['silo']['distancia']:.1f} km)",
+                    tooltip="Armazém/Silo Mais Próximo",
+                    icon=folium.Icon(color='orange', icon='industry', prefix='fa')
                 ).add_to(m)
                 folium.PolyLine(
                     locations=[farm_coords, silo_coords],
-                    color='green', weight=3, opacity=0.8,
-                    tooltip=f"Distância ao Silo: {pois['silo']['distancia']:.1f} km"
+                    color='yellow', weight=3, opacity=0.8,
+                    tooltip=f"Distância ao Armazém: {pois['silo']['distancia']:.1f} km"
                 ).add_to(m)
 
-            # Rodovia (Laranja)
+            # Rodovia (Laranja Escuro)
             if pois['rodovia']['coords']:
                 rodovia_coords = pois['rodovia']['coords']
                 folium.Marker(
                     rodovia_coords, 
                     popup=f"🛣️ **Rodovia**: {pois['rodovia']['nome']} ({pois['rodovia']['distancia']:.1f} km)",
                     tooltip="Rodovia Mais Próxima",
-                    icon=folium.Icon(color='orange', icon='road', prefix='fa')
+                    icon=folium.Icon(color='red', icon='road', prefix='fa')
                 ).add_to(m)
                 folium.PolyLine(
                     locations=[farm_coords, rodovia_coords],
@@ -163,8 +163,7 @@ if analisar:
             pois = st.session_state.pois
             st.success(f"🛣️ **Rodovia mais próxima:** Aprox. **{pois['rodovia']['distancia']:.1f} km**")
             st.success(f"🏙️ **Cidade/Vila mais próxima:** {pois['cidade']['nome']} (aprox. **{pois['cidade']['distancia']:.1f} km**)")
-            # MUDANÇA AQUI: Texto atualizado para 'Silo/Graneleiro'
-            st.success(f"🌾 **Silo/Graneleiro mais próximo:** {pois['silo']['nome']} (aprox. **{pois['silo']['distancia']:.1f} km**)")
+            st.success(f"📦 **Armazém/Silo mais próximo:** {pois['silo']['nome']} (aprox. **{pois['silo']['distancia']:.1f} km**)")
         if 'hub' in st.session_state:
             st.success(f"🏭 **Polo de Agronegócio mais próximo:** {st.session_state.hub['nome']} (aprox. **{st.session_state.hub['distancia']:.1f} km**)")
     
