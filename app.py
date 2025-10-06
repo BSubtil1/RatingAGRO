@@ -5,15 +5,14 @@ import pandas as pd
 import folium
 from streamlit_folium import folium_static
 from scoring_engine import calcular_indice_viabilidade, PESOS, JUSTIFICATIVAS_PESOS
-# MUDANÇA AQUI: importamos a nova função de clima
 from geolocation_service import find_all_nearest_pois, find_nearest_hub, get_clima_data
 
 # --- Configuração da Página ---
-st.set_page_config(page_title="AgroScore Validator 4.2", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="AgroScore Validator 4.3", page_icon="🛰️", layout="wide")
 
 # --- Título e Descrição ---
-st.title("🛰️ AgroScore Validator DO BRUNÃO 4.2")
-st.markdown("Plataforma com **análise climática e logística integradas**. Preencha os dados e clique em 'Analisar Viabilidade' para um diagnóstico completo.")
+st.title("🛰️ AgroScore Validator 4.3")
+st.markdown("Plataforma com **análise climática e logística automáticas**. Preencha os dados e clique em 'Analisar Viabilidade' para um diagnóstico completo.")
 
 # --- Barra Lateral de Entradas (Inputs) ---
 with st.sidebar:
@@ -23,7 +22,7 @@ with st.sidebar:
     longitude = st.number_input("Longitude da Sede", value=-49.2648, format="%.6f")
 
     st.subheader("1. Logística (Peso: {}%)".format(int(PESOS['logistica']*100)))
-    st.info("As distâncias e o índice pluviométrico podem ser preenchidos automaticamente ao clicar em 'Analisar', ou ajustados manualmente.")
+    st.info("As distâncias e o índice pluviométrico serão preenchidos automaticamente.")
     dist_asfalto_km = st.number_input("Distância da Rodovia (km)", min_value=0.0, value=25.0, key="dist_rodovia")
     dist_silo_km = st.number_input("Distância do Armazém Graneleiro (km)", min_value=0.0, value=60.0, key="dist_silo")
 
@@ -32,15 +31,10 @@ with st.sidebar:
     possui_geo_sigef = st.checkbox("Possui Georreferenciamento (SIGEF)?", value=True)
     
     st.subheader("3. Recursos Hídricos (Peso: {}%)".format(int(PESOS['recursos_hidricos']*100)))
-    # MUDANÇA AQUI: O valor deste slider será atualizado pela busca
-    indice_pluviometrico_mm = st.slider(
-        "Índice Pluviométrico Médio Anual (mm)", 600, 2500, 
-        st.session_state.get('clima_chuva', 1500), # Usa valor do session_state ou 1500
-        key='slider_chuva'
-    )
+    # MUDANÇA AQUI: Removemos o slider e colocamos um placeholder
+    st.text_input("Índice Pluviométrico Médio Anual (mm)", "Será buscado automaticamente...", disabled=True)
     presenca_rio_perene = st.checkbox("Possui Rio Perene na propriedade?", value=True)
 
-    # ... (Restante da barra lateral continua igual)
     st.subheader("4. Agronomia (Peso: {}%)".format(int(PESOS['agronomia']*100)))
     ph_solo = st.slider("pH médio do Solo", 3.0, 9.0, 5.8, 0.1)
     teor_argila_percent = st.slider("Teor de Argila do Solo (%)", 5, 70, 30)
@@ -53,11 +47,16 @@ with st.sidebar:
 if analisar:
     all_pois = None
     hub = None
-    # MUDANÇA AQUI: Adicionamos a busca de clima ao spinner
-    with st.spinner("Buscando dados geográficos, logísticos e climáticos..."):
+    clima_data = None
+    with st.spinner("Buscando dados geográficos, logísticos e climáticos... (Pode levar até 1 minuto)"):
         all_pois = find_all_nearest_pois(latitude, longitude, return_coords=True)
         hub = find_nearest_hub(latitude, longitude)
-        st.session_state.clima_chuva = get_clima_data(latitude, longitude)
+        clima_data = get_clima_data(latitude, longitude)
+
+    # MUDANÇA AQUI: A análise só continua se os dados essenciais (clima) forem encontrados
+    if clima_data is None:
+        st.error("A análise foi interrompida porque não foi possível obter os dados de clima. Tente novamente.")
+        st.stop() # Interrompe a execução do app
 
     dist_rodovia_final = st.session_state.dist_rodovia
     dist_silo_final = st.session_state.dist_silo
@@ -67,14 +66,10 @@ if analisar:
         dist_silo_final = all_pois['silo']['distancia']
         st.success("Busca geográfica concluída com sucesso!")
     
-    # Usa o valor de chuva automático se ele foi encontrado, senão, usa o valor do slider
-    chuva_final = st.session_state.clima_chuva if st.session_state.clima_chuva else st.session_state.slider_chuva
-
     dados_fazenda = {
-        'dist_asfalto_km': dist_rodovia_final, 
-        'dist_silo_km': dist_silo_final,
+        'dist_asfalto_km': dist_rodovia_final, 'dist_silo_km': dist_silo_final,
         'situacao_reserva_legal': situacao_reserva_legal, 'possui_geo_sigef': possui_geo_sigef,
-        'indice_pluviometrico_mm': chuva_final, # MUDANÇA AQUI
+        'indice_pluviometrico_mm': clima_data, # Usa o dado automático
         'presenca_rio_perene': presenca_rio_perene,
         'ph_solo': ph_solo, 'teor_argila_percent': teor_argila_percent,
         'percentual_mecanizavel': percentual_mecanizavel
@@ -90,8 +85,7 @@ if analisar:
         col1, col2 = st.columns(2)
         with col1:
             st.metric(label="Índice de Viabilidade Final", value=f"{indice_final:.2f} / 10")
-            if chuva_final:
-                st.metric(label="Média Anual de Chuva (30 anos)", value=f"{chuva_final} mm")
+            st.metric(label="Média Anual de Chuva (30 anos)", value=f"{clima_data} mm")
         with col2:
             st.subheader(f"Classificação do Ativo: {classe}")
             st.info(desc_classe)
