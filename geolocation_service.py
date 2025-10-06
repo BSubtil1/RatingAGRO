@@ -24,38 +24,34 @@ def get_distance(coord1, coord2):
     """Calcula a distância em km entre duas coordenadas."""
     return geodesic(coord1, coord2).kilometers
 
-@st.cache_data(show_spinner=False, ttl=3600) # Adiciona cache para evitar buscas repetidas
-def find_all_nearest_pois(lat, lon):
+@st.cache_data(show_spinner=False, ttl=3600)
+def find_all_nearest_pois(lat, lon, return_coords=False): # Adicionamos o parâmetro return_coords
     """
-    Realiza UMA ÚNICA busca otimizada para encontrar todos os POIs de uma vez.
+    Realiza UMA ÚNICA busca otimizada para encontrar todos os POIs de uma vez,
+    agora com a opção de retornar as coordenadas dos POIs.
     """
-    # Raios de busca otimizados: maior para rodovias, menor para POIs locais
     raio_rodovia_m = 100 * 1000
-    raio_local_m = 75 * 1000 # Raio reduzido para cidades e armazéns
+    raio_local_m = 75 * 1000
 
-    # Query única que une as 3 buscas
     query_combinada = f"""
     [out:json][timeout:30];
     (
-      // Busca por rodovias num raio maior
       way["highway"~"primary|secondary|tertiary|motorway"](around:{raio_rodovia_m},{lat},{lon});
-      // Busca por cidades num raio menor
       node["place"~"city|town|village"](around:{raio_local_m},{lat},{lon});
-      // Busca por armazéns num raio menor (query simplificada e mais abrangente)
       node["amenity"="storage_rental"](around:{raio_local_m},{lat},{lon});
       way["building"="warehouse"](around:{raio_local_m},{lat},{lon});
     );
     out center;
     """
     
+    # Valores padrão, incluindo 'coords': None
     results = {
-        "rodovia": {"nome": "Não encontrada", "distancia": raio_rodovia_m / 1000},
-        "cidade": {"nome": "Não encontrada", "distancia": raio_local_m / 1000},
-        "armazem": {"nome": "Não encontrado", "distancia": raio_local_m / 1000}
+        "rodovia": {"nome": "Não encontrada", "distancia": raio_rodovia_m / 1000, "coords": None},
+        "cidade": {"nome": "Não encontrada", "distancia": raio_local_m / 1000, "coords": None},
+        "armazem": {"nome": "Não encontrado", "distancia": raio_local_m / 1000, "coords": None}
     }
 
     try:
-        # Adiciona um timeout de 30 segundos na requisição
         response = requests.post(OVERPASS_URL, data=query_combinada, timeout=30)
         response.raise_for_status()
         data = response.json()
@@ -65,7 +61,6 @@ def find_all_nearest_pois(lat, lon):
 
         farm_coords = (lat, lon)
         
-        # Dicionários para guardar a menor distância de cada tipo
         min_dists = {
             "rodovia": float('inf'),
             "cidade": float('inf'),
@@ -80,22 +75,21 @@ def find_all_nearest_pois(lat, lon):
                 poi_coords = (element['center']['lat'], element['center']['lon'])
             else:
                 poi_coords = (element['lat'], element['lon'])
-            
+
             dist = get_distance(farm_coords, poi_coords)
 
-            # Identifica o tipo de POI e atualiza se a distância for menor
             if "highway" in tags:
                 if dist < min_dists["rodovia"]:
                     min_dists["rodovia"] = dist
-                    results["rodovia"] = {"nome": name, "distancia": round(dist)}
+                    results["rodovia"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
             elif "place" in tags:
                 if dist < min_dists["cidade"]:
                     min_dists["cidade"] = dist
-                    results["cidade"] = {"nome": name, "distancia": round(dist)}
+                    results["cidade"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
             elif "amenity" in tags or "building" in tags:
                 if dist < min_dists["armazem"]:
                     min_dists["armazem"] = dist
-                    results["armazem"] = {"nome": name, "distancia": round(dist)}
+                    results["armazem"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
 
         return results
 
@@ -110,15 +104,16 @@ def find_all_nearest_pois(lat, lon):
         return None
 
 def find_nearest_hub(lat, lon):
-    """Encontra o Polo de Agronegócio mais próximo da lista pré-definida."""
+    """Encontra o Polo de Agronegócio mais próximo da lista pré-definida, retornando as coordenadas."""
     farm_coords = (lat, lon)
     min_dist = float('inf')
     nearest_hub = None
+    nearest_hub_coords = None
 
-    for hub, coords in HUBS_AGRO.items():
+    for hub_name, coords in HUBS_AGRO.items():
         dist = get_distance(farm_coords, coords)
         if dist < min_dist:
             min_dist = dist
-            nearest_hub = {"nome": hub, "distancia": round(dist)}
+            nearest_hub = {"nome": hub_name, "distancia": round(dist, 1), "coords": coords} # Agora retorna coords
             
     return nearest_hub
