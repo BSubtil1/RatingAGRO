@@ -22,7 +22,7 @@ with st.sidebar:
     latitude = st.number_input("Latitude da Sede", value=-16.6869, format="%.6f")
     longitude = st.number_input("Longitude da Sede", value=-49.2648, format="%.6f")
 
-    # Inicializa st.session_state se ainda não estiverem definidos
+    # CORREÇÃO APLICADA AQUI: a chave 'armazem' foi trocada para 'silo'
     if 'pois' not in st.session_state:
         st.session_state.pois = {
             'rodovia': {'nome': 'Não encontrada', 'distancia': 25.0, 'coords': None},
@@ -111,7 +111,6 @@ if analisar:
             pois = st.session_state.pois
             
             # Linha para Silo/Graneleiro (Amarelo)
-            # CORREÇÃO APLICADA AQUI: VOLTAMOS PARA A COR AMARELA E ÍCONE DE INDÚSTRIA
             if pois['silo']['coords']:
                 silo_coords = pois['silo']['coords']
                 folium.Marker(
