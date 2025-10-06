@@ -31,16 +31,16 @@ with st.sidebar:
 
     st.subheader("1. Logística (Peso: {}%)".format(int(PESOS['logistica']*100)))
     # Usamos o st.session_state para guardar os valores encontrados
-    dist_asfalto_km = st.number_input(
-        "Distância da Rodovia (km)", 
-        min_value=0, 
-        value=st.session_state.get('pois', {}).get('rodovia', {}).get('distancia', 25)
-    )
-    dist_silo_km = st.number_input(
-        "Distância do Armazém (km)",
-        min_value=0, 
-        value=st.session_state.get('pois', {}).get('armazem', {}).get('distancia', 60)
-    )
+    dist_asfalto_km = st.number_input("Distância da Rodovia (km)",
+    min_value=0.0,
+    value=float(st.session_state.get('pois', {}).get('rodovia', {}).get('distancia', 25.0)) # MUDANÇA AQUI
+)
+dist_silo_km = st.number_input(
+    "Distância do Armazém (km)",
+    min_value=0.0,
+    value=float(st.session_state.get('pois', {}).get('armazem', {}).get('distancia', 60.0)) # MUDANÇA AQUI
+)
+Adicionei a função float() em volta do value para garantir que, independentemente do que venha do session_state, ele será convertido para um número float, combinando com o min_value=0.0.
 
     # O restante dos inputs continua igual
     st.subheader("2. Legal e Ambiental (Peso: {}%)".format(int(PESOS['legal_ambiental']*100)))
