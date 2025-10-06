@@ -116,7 +116,19 @@ if analisar:
             folium_static(m, width=950, height=600)
 
             st.markdown("#### Distâncias Calculadas:")
-            # CORREÇÃO APLICADA NESTAS 4 LINHAS ABAIXO
             st.success(f"🛣️ **Rodovia mais próxima:** Aprox. **{all_pois['rodovia']['distancia']:.1f} km**")
             st.success(f"🏙️ **Cidade/Vila mais próxima:** {all_pois['cidade']['nome']} (aprox. **{all_pois['cidade']['distancia']:.1f} km**)")
-            st.success(f"📦 **Armazém/
+            st.success(f"📦 **Armazém/Silo mais próximo:** {all_pois['silo']['nome']} (aprox. **{all_pois['silo']['distancia']:.1f} km**)")
+            st.success(f"🏭 **Polo de Agronegócio mais próximo:** {hub['nome']} (aprox. **{hub['distancia']:.1f} km**)")
+            
+        with tab3:
+            st.subheader("Argumentação Sobre os Pesos da Análise")
+            st.info("A metodologia de pesos reflete a realidade do investimento em ativos rurais...")
+            for categoria, just in JUSTIFICATIVAS_PESOS.items():
+                with st.expander(f"**{categoria.replace('_', ' ').title()} (Peso: {int(PESOS[categoria]*100)}%)**"):
+                    st.markdown(just)
+    else:
+        st.error("Não foi possível buscar os dados geográficos. Verifique a conexão ou as coordenadas e tente novamente.")
+
+else:
+    st.info("Preencha os dados da propriedade na barra lateral e clique em 'Analisar Viabilidade' para um diagnóstico completo.")
