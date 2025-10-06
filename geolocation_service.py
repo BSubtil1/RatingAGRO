@@ -3,12 +3,12 @@
 import requests
 from geopy.distance import geodesic
 import streamlit as st
+import json
 
-# Endpoint da API Overpass, que consulta a base de dados do OpenStreetMap
+# Endpoint da API Overpass
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 # Cidades/Polos importantes para o agronegócio brasileiro (lat, lon)
-# Esta lista pode ser expandida conforme a necessidade
 HUBS_AGRO = {
     "Rio Verde (GO)": (-17.7972, -50.9262),
     "Goiânia (GO)": (-16.6869, -49.2648),
@@ -24,66 +24,89 @@ def get_distance(coord1, coord2):
     """Calcula a distância em km entre duas coordenadas."""
     return geodesic(coord1, coord2).kilometers
 
-@st.cache_data(show_spinner=False)
-def find_nearest_poi(lat, lon, poi_query, radius_km=150):
+@st.cache_data(show_spinner=False, ttl=3600) # Adiciona cache para evitar buscas repetidas
+def find_all_nearest_pois(lat, lon):
     """
-    Encontra o Ponto de Interesse (POI) mais próximo no OpenStreetMap.
-    
-    Args:
-        lat (float): Latitude da fazenda.
-        lon (float): Longitude da fazenda.
-        poi_query (str): A query no formato da Overpass API.
-        radius_km (int): O raio de busca em quilômetros.
+    Realiza UMA ÚNICA busca otimizada para encontrar todos os POIs de uma vez.
+    """
+    # Raios de busca otimizados: maior para rodovias, menor para POIs locais
+    raio_rodovia_m = 100 * 1000
+    raio_local_m = 75 * 1000 # Raio reduzido para cidades e armazéns
 
-    Returns:
-        dict: Um dicionário com o nome e a distância do POI mais próximo.
-    """
-    radius_m = radius_km * 1000
-    
-    # Monta a query final
-    full_query = f"""
-    [out:json];
+    # Query única que une as 3 buscas
+    query_combinada = f"""
+    [out:json][timeout:30];
     (
-      {poi_query}(around:{radius_m},{lat},{lon});
+      // Busca por rodovias num raio maior
+      way["highway"~"primary|secondary|tertiary|motorway"](around:{raio_rodovia_m},{lat},{lon});
+      // Busca por cidades num raio menor
+      node["place"~"city|town|village"](around:{raio_local_m},{lat},{lon});
+      // Busca por armazéns num raio menor (query simplificada e mais abrangente)
+      node["amenity"="storage_rental"](around:{raio_local_m},{lat},{lon});
+      way["building"="warehouse"](around:{raio_local_m},{lat},{lon});
     );
     out center;
     """
     
+    results = {
+        "rodovia": {"nome": "Não encontrada", "distancia": raio_rodovia_m / 1000},
+        "cidade": {"nome": "Não encontrada", "distancia": raio_local_m / 1000},
+        "armazem": {"nome": "Não encontrado", "distancia": raio_local_m / 1000}
+    }
+
     try:
-        response = requests.post(OVERPASS_URL, data=full_query)
-        response.raise_for_status()  # Lança um erro para respostas ruins (4xx ou 5xx)
+        # Adiciona um timeout de 30 segundos na requisição
+        response = requests.post(OVERPASS_URL, data=query_combinada, timeout=30)
+        response.raise_for_status()
         data = response.json()
-        
+
         if not data['elements']:
-            return {"nome": "Nenhum encontrado no raio de busca", "distancia": radius_km}
+            return results
 
         farm_coords = (lat, lon)
-        nearest = None
-        min_dist = float('inf')
+        
+        # Dicionários para guardar a menor distância de cada tipo
+        min_dists = {
+            "rodovia": float('inf'),
+            "cidade": float('inf'),
+            "armazem": float('inf')
+        }
 
         for element in data['elements']:
             tags = element.get('tags', {})
             name = tags.get('name', 'Sem nome')
             
-            # Pega as coordenadas do centro do elemento (para estradas) ou do nó
             if 'center' in element:
                 poi_coords = (element['center']['lat'], element['center']['lon'])
             else:
                 poi_coords = (element['lat'], element['lon'])
-
+            
             dist = get_distance(farm_coords, poi_coords)
 
-            if dist < min_dist:
-                min_dist = dist
-                nearest = {"nome": name, "distancia": round(dist)}
-        
-        return nearest
+            # Identifica o tipo de POI e atualiza se a distância for menor
+            if "highway" in tags:
+                if dist < min_dists["rodovia"]:
+                    min_dists["rodovia"] = dist
+                    results["rodovia"] = {"nome": name, "distancia": round(dist)}
+            elif "place" in tags:
+                if dist < min_dists["cidade"]:
+                    min_dists["cidade"] = dist
+                    results["cidade"] = {"nome": name, "distancia": round(dist)}
+            elif "amenity" in tags or "building" in tags:
+                if dist < min_dists["armazem"]:
+                    min_dists["armazem"] = dist
+                    results["armazem"] = {"nome": name, "distancia": round(dist)}
 
+        return results
+
+    except requests.exceptions.Timeout:
+        st.error("A busca demorou demais e foi cancelada (Timeout). Tente novamente ou verifique as coordenadas.")
+        return None
     except requests.exceptions.RequestException as e:
         st.error(f"Erro de conexão com a API de mapas: {e}")
         return None
-    except Exception as e:
-        st.error(f"Ocorreu um erro inesperado na busca: {e}")
+    except json.JSONDecodeError:
+        st.error("A API de mapas retornou uma resposta inválida. O serviço pode estar temporariamente fora do ar.")
         return None
 
 def find_nearest_hub(lat, lon):
@@ -99,8 +122,3 @@ def find_nearest_hub(lat, lon):
             nearest_hub = {"nome": hub, "distancia": round(dist)}
             
     return nearest_hub
-
-# Queries pré-definidas para a API Overpass
-QUERY_RODOVIA = 'way["highway"~"primary|secondary|tertiary|motorway"]'
-QUERY_ARMAZEM = 'node["industrial"~"warehouse"]["service"~"storage"]'
-QUERY_CIDADE = 'node["place"~"city|town"]'
