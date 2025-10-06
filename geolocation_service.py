@@ -25,30 +25,38 @@ def get_distance(coord1, coord2):
     return geodesic(coord1, coord2).kilometers
 
 @st.cache_data(show_spinner=False, ttl=3600)
-def find_all_nearest_pois(lat, lon, return_coords=False): # Adicionamos o parâmetro return_coords
+def find_all_nearest_pois(lat, lon, return_coords=False):
     """
     Realiza UMA ÚNICA busca otimizada para encontrar todos os POIs de uma vez,
-    agora com a opção de retornar as coordenadas dos POIs.
+    agora com uma busca específica para silos/graneleiros.
     """
     raio_rodovia_m = 100 * 1000
     raio_local_m = 75 * 1000
 
+    # MUDANÇA AQUI: Adicionamos uma query específica e mais inteligente para silos
     query_combinada = f"""
     [out:json][timeout:30];
     (
+      // Busca por rodovias num raio maior
       way["highway"~"primary|secondary|tertiary|motorway"](around:{raio_rodovia_m},{lat},{lon});
+      // Busca por cidades num raio menor
       node["place"~"city|town|village"](around:{raio_local_m},{lat},{lon});
-      node["amenity"="storage_rental"](around:{raio_local_m},{lat},{lon});
-      way["building"="warehouse"](around:{raio_local_m},{lat},{lon});
+      // Busca por Silos e Graneleiros num raio menor
+      (
+        node["man_made"="silo"](around:{raio_local_m},{lat},{lon});
+        way["man_made"="silo"](around:{raio_local_m},{lat},{lon});
+        node[~"^(name|description)$"~"graneleiro|silo|cooperativa|agrícola",i](around:{raio_local_m},{lat},{lon});
+        way[~"^(name|description)$"~"graneleiro|silo|cooperativa|agrícola",i](around:{raio_local_m},{lat},{lon});
+      );
     );
     out center;
     """
     
-    # Valores padrão, incluindo 'coords': None
+    # MUDANÇA AQUI: Renomeamos 'armazem' para 'silo' para maior clareza
     results = {
         "rodovia": {"nome": "Não encontrada", "distancia": raio_rodovia_m / 1000, "coords": None},
         "cidade": {"nome": "Não encontrada", "distancia": raio_local_m / 1000, "coords": None},
-        "armazem": {"nome": "Não encontrado", "distancia": raio_local_m / 1000, "coords": None}
+        "silo": {"nome": "Não encontrado", "distancia": raio_local_m / 1000, "coords": None}
     }
 
     try:
@@ -64,18 +72,18 @@ def find_all_nearest_pois(lat, lon, return_coords=False): # Adicionamos o parâm
         min_dists = {
             "rodovia": float('inf'),
             "cidade": float('inf'),
-            "armazem": float('inf')
+            "silo": float('inf')
         }
 
         for element in data['elements']:
             tags = element.get('tags', {})
-            name = tags.get('name', 'Sem nome')
+            name = tags.get('name', 'Silo/Armazém')
             
             if 'center' in element:
                 poi_coords = (element['center']['lat'], element['center']['lon'])
             else:
                 poi_coords = (element['lat'], element['lon'])
-
+            
             dist = get_distance(farm_coords, poi_coords)
 
             if "highway" in tags:
@@ -86,10 +94,11 @@ def find_all_nearest_pois(lat, lon, return_coords=False): # Adicionamos o parâm
                 if dist < min_dists["cidade"]:
                     min_dists["cidade"] = dist
                     results["cidade"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
-            elif "amenity" in tags or "building" in tags:
-                if dist < min_dists["armazem"]:
-                    min_dists["armazem"] = dist
-                    results["armazem"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
+            # MUDANÇA AQUI: Identifica elementos que são silos/graneleiros
+            elif "man_made" in tags and tags["man_made"] == "silo" or "agrícola" in name.lower() or "cooperativa" in name.lower() or "graneleiro" in name.lower():
+                if dist < min_dists["silo"]:
+                    min_dists["silo"] = dist
+                    results["silo"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
 
         return results
 
@@ -108,12 +117,11 @@ def find_nearest_hub(lat, lon):
     farm_coords = (lat, lon)
     min_dist = float('inf')
     nearest_hub = None
-    nearest_hub_coords = None
 
     for hub_name, coords in HUBS_AGRO.items():
         dist = get_distance(farm_coords, coords)
         if dist < min_dist:
             min_dist = dist
-            nearest_hub = {"nome": hub_name, "distancia": round(dist, 1), "coords": coords} # Agora retorna coords
+            nearest_hub = {"nome": hub_name, "distancia": round(dist, 1), "coords": coords}
             
     return nearest_hub
