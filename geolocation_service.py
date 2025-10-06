@@ -23,53 +23,50 @@ HUBS_AGRO = {
 def get_distance(coord1, coord2):
     return geodesic(coord1, coord2).kilometers
 
-@st.cache_data(show_spinner=False, ttl=86400) # Cache de 1 dia
+@st.cache_data(show_spinner=False, ttl=86400)
 def get_clima_data(lat, lon):
     """
     Busca a média histórica de chuva anual para uma coordenada (últimos 30 anos).
     """
-    # Calcula o período de 30 anos
     ano_atual = datetime.now().year
     start_date = f"{ano_atual - 31}-01-01"
     end_date = f"{ano_atual - 1}-12-31"
 
     params = {
-        "latitude": lat,
-        "longitude": lon,
-        "start_date": start_date,
-        "end_date": end_date,
-        "daily": "precipitation_sum",
-        "timezone": "auto"
+        "latitude": lat, "longitude": lon, "start_date": start_date,
+        "end_date": end_date, "daily": "precipitation_sum", "timezone": "auto"
     }
     try:
-        response = requests.get(OPEN_METEO_URL, params=params, timeout=20)
+        # MUDANÇA AQUI: Aumentamos o tempo de espera para 45 segundos
+        response = requests.get(OPEN_METEO_URL, params=params, timeout=45)
         response.raise_for_status()
         data = response.json()
 
         if 'daily' not in data or 'precipitation_sum' not in data['daily']:
-            st.warning("API de clima não retornou dados de precipitação.")
+            st.error("Erro na API de clima: Dados de precipitação não encontrados na resposta.")
             return None
 
         total_precipitation = sum(p for p in data['daily']['precipitation_sum'] if p is not None)
         num_years = len(data['daily']['time']) / 365.25
         
-        if num_years == 0:
+        if num_years < 28: # Garante que temos dados de pelo menos 28 dos 30 anos
+            st.error("Erro na API de clima: Dados históricos insuficientes para um cálculo preciso.")
             return None
 
         annual_avg = total_precipitation / num_years
         return int(annual_avg)
 
     except requests.exceptions.Timeout:
-        st.warning("A busca de dados de clima demorou demais (Timeout). Usar valor manual.")
+        # MUDANÇA AQUI: Mensagem de erro mais clara
+        st.error("A busca de dados de clima demorou demais e falhou (Timeout). Tente novamente em alguns instantes.")
         return None
     except Exception as e:
-        st.warning(f"Não foi possível buscar dados de clima. Usar valor manual. Erro: {e}")
+        st.error(f"Não foi possível buscar os dados de clima. Erro: {e}")
         return None
 
-
+# ... (O restante do arquivo, com as funções find_all_nearest_pois e find_nearest_hub, continua exatamente igual) ...
 @st.cache_data(show_spinner=False, ttl=3600)
 def find_all_nearest_pois(lat, lon, return_coords=False):
-    # ... (O restante desta função continua exatamente igual) ...
     raio_rodovia_m = 100 * 1000
     raio_local_m = 75 * 1000
     query_combinada = f"""
@@ -117,7 +114,7 @@ def find_all_nearest_pois(lat, lon, return_coords=False):
                     results["silo"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
         return results
     except requests.exceptions.Timeout:
-        st.error("A busca demorou demais e foi cancelada (Timeout). A análise usará os valores manuais de distância.")
+        st.error("A busca de dados geográficos demorou demais (Timeout). A análise usará os valores manuais de distância.")
         return None
     except requests.exceptions.RequestException as e:
         st.warning(f"Não foi possível buscar dados geográficos. A análise usará os valores manuais. Erro: {e}")
@@ -127,7 +124,6 @@ def find_all_nearest_pois(lat, lon, return_coords=False):
         return None
 
 def find_nearest_hub(lat, lon):
-    # ... (Esta função continua exatamente igual) ...
     farm_coords = (lat, lon)
     min_dist = float('inf')
     nearest_hub = None
