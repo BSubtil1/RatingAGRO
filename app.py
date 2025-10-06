@@ -5,13 +5,13 @@ import pandas as pd
 import folium
 from streamlit_folium import folium_static
 from scoring_engine import calcular_indice_viabilidade, PESOS, JUSTIFICATIVAS_PESOS
-from geolocation_service import find_all_nearest_pois, find_nearest_hub, get_clima_data, get_soil_data
+from geolocation_service import find_all_nearest_pois, find_nearest_hub, get_clima_data
 
 # --- Configuração da Página ---
-st.set_page_config(page_title="AgroScore Validator 4.5", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="AgroScore Validator 4.6", page_icon="🛰️", layout="wide")
 
 # --- Título e Descrição ---
-st.title("🛰️ AgroScore Validator 4.5")
+st.title("🛰️ AgroScore Validator 4.6")
 st.markdown("Plataforma com **análise de solo, clima e logística automáticas**.")
 
 # --- Barra Lateral de Entradas (Inputs) ---
@@ -23,8 +23,8 @@ with st.sidebar:
 
     st.subheader("1. Logística (Peso: {}%)".format(int(PESOS['logistica']*100)))
     st.info("Todos os dados de Logística, Clima e Solo serão preenchidos automaticamente.")
-    st.text_input("Distância da Rodovia (km)", "Automático...", key="dist_rodovia_display", disabled=True)
-    st.text_input("Distância do Armazém Graneleiro (km)", "Automático...", key="dist_silo_display", disabled=True)
+    st.text_input("Distância da Rodovia (km)", "Automático...", disabled=True)
+    st.text_input("Distância do Armazém Graneleiro (km)", "Automático...", disabled=True)
 
     st.subheader("2. Legal e Ambiental (Peso: {}%)".format(int(PESOS['legal_ambiental']*100)))
     situacao_reserva_legal = st.selectbox("Situação da Reserva Legal (CAR)", ['Averbada e regular', 'Averbada, mas precisa de averiguação', 'Pendente com passivo'])
@@ -45,25 +45,29 @@ with st.sidebar:
 
 # --- Painel Principal de Resultados ---
 if analisar:
-    all_pois, hub, clima_data, soil_data = None, None, None, None
-    with st.spinner("Buscando dados de solo, clima, geografia e logística... (Pode levar até 1 minuto)"):
-        all_pois = find_all_nearest_pois(latitude, longitude, return_coords=True)
-        hub = find_nearest_hub(latitude, longitude)
-        clima_data = get_clima_data(latitude, longitude)
-        soil_data = get_soil_data(latitude, longitude)
+    with st.spinner("Buscando e processando dados... (Pode levar até 1 minuto)"):
+        clima_success, clima_data = get_clima_data(latitude, longitude)
+        pois_success, all_pois = find_all_nearest_pois(latitude, longitude, return_coords=True)
+        hub_success, hub = find_nearest_hub(latitude, longitude)
 
-    if any(data is None for data in [clima_data, all_pois, hub, soil_data]):
-        st.error("A análise foi interrompida porque não foi possível obter todos os dados automáticos. Verifique as mensagens de erro e tente novamente.")
+    # Verifica se todas as buscas tiveram sucesso antes de continuar
+    if not all(s for s, d in [(clima_success, clima_data), (pois_success, all_pois), (hub_success, hub)]):
+        st.error("A análise foi interrompida. Verifique as mensagens de erro e tente novamente:")
+        if not clima_success: st.warning(f"Clima: {clima_data}")
+        if not pois_success: st.warning(f"Logística: {all_pois}")
         st.stop()
     
+    st.success("Busca de dados automáticos concluída com sucesso!")
+
     dados_fazenda = {
         'dist_asfalto_km': all_pois['rodovia']['distancia'], 
         'dist_silo_km': all_pois['silo']['distancia'],
         'situacao_reserva_legal': situacao_reserva_legal, 'possui_geo_sigef': possui_geo_sigef,
         'indice_pluviometrico_mm': clima_data,
         'presenca_rio_perene': presenca_rio_perene,
-        'ph_solo': soil_data['ph'],
-        'teor_argila_percent': soil_data['clay'],
+        # Valores padrão para pH e Argila, pois ainda não os buscamos
+        'ph_solo': st.session_state.get('soil_ph', 5.8),
+        'teor_argila_percent': st.session_state.get('soil_clay', 30.0),
         'percentual_mecanizavel': percentual_mecanizavel
     }
     
@@ -74,20 +78,15 @@ if analisar:
 
     with tab1:
         st.subheader("Compilado da Avaliação")
-        
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
             st.metric(label="Índice de Viabilidade Final", value=f"{indice_final:.2f} / 10")
-        with col2:
             st.metric(label="Média de Chuva (30 anos)", value=f"{clima_data} mm")
-        with col3:
-            st.metric(label="pH do Solo (0-20cm)", value=f"{soil_data['ph']:.2f}")
-            st.metric(label="Argila no Solo (0-20cm)", value=f"{soil_data['clay']:.1f}%")
-        
-        st.info(f"**Classificação do Ativo: {classe}** - {desc_classe}")
+        with col2:
+            st.subheader(f"Classificação do Ativo: {classe}")
+            st.info(desc_classe)
         st.info(f"📍 A fazenda está a aproximadamente **{hub['distancia']:.0f} km** do polo regional **{hub['nome']}**.")
         st.divider()
-
         st.subheader("Pontuações por Categoria")
         for categoria, score in scores_detalhados.items():
             st.markdown(f"**{categoria.replace('_', ' ').title()}**")
@@ -101,20 +100,19 @@ if analisar:
         if hub and hub.get('coords'):
             folium.Marker(hub['coords'], popup=f"🏭 **Polo Agro**: {hub['nome']} ({hub['distancia']:.1f} km)", tooltip="Polo Agro Mais Próximo", icon=folium.Icon(color='purple', icon='star', prefix='fa')).add_to(m)
             folium.PolyLine(locations=[farm_coords, hub['coords']], color='purple', weight=3, opacity=0.8, tooltip=f"Distância ao Polo: {hub['distancia']:.1f} km").add_to(m)
-        if all_pois and all_pois['silo'].get('coords'):
+        if all_pois and all_pois.get('silo', {}).get('coords'):
             folium.Marker(all_pois['silo']['coords'], popup=f"📦 **Armazém/Silo**: {all_pois['silo']['nome']} ({all_pois['silo']['distancia']:.1f} km)", tooltip="Armazém/Silo Mais Próximo", icon=folium.Icon(color='orange', icon='industry', prefix='fa')).add_to(m)
             folium.PolyLine(locations=[farm_coords, all_pois['silo']['coords']], color='yellow', weight=3, opacity=0.8, tooltip=f"Distância ao Armazém: {all_pois['silo']['distancia']:.1f} km").add_to(m)
-        if all_pois and all_pois['rodovia'].get('coords'):
+        if all_pois and all_pois.get('rodovia', {}).get('coords'):
             folium.Marker(all_pois['rodovia']['coords'], popup=f"🛣️ **Rodovia**: {all_pois['rodovia']['nome']} ({all_pois['rodovia']['distancia']:.1f} km)", tooltip="Rodovia Mais Próxima", icon=folium.Icon(color='red', icon='road', prefix='fa')).add_to(m)
             folium.PolyLine(locations=[farm_coords, all_pois['rodovia']['coords']], color='darkorange', weight=3, opacity=0.8, tooltip=f"Distância à Rodovia: {all_pois['rodovia']['distancia']:.1f} km").add_to(m)
-        if all_pois and all_pois['cidade'].get('coords'):
+        if all_pois and all_pois.get('cidade', {}).get('coords'):
             folium.Marker(all_pois['cidade']['coords'], popup=f"🏙️ **Cidade**: {all_pois['cidade']['nome']} ({all_pois['cidade']['distancia']:.1f} km)", tooltip="Cidade Mais Próxima", icon=folium.Icon(color='lightgray', icon='building', prefix='fa')).add_to(m)
             folium.PolyLine(locations=[farm_coords, all_pois['cidade']['coords']], color='gray', weight=3, opacity=0.8, tooltip=f"Distância à Cidade: {all_pois['cidade']['distancia']:.1f} km").add_to(m)
         folium_static(m, width=950, height=600)
 
     with tab3:
         st.subheader("Argumentação Sobre os Pesos da Análise")
-        st.info("A metodologia de pesos reflete a realidade do investimento em ativos rurais...")
         for categoria, just in JUSTIFICATIVAS_PESOS.items():
             with st.expander(f"**{categoria.replace('_', ' ').title()} (Peso: {int(PESOS[categoria]*100)}%)**"):
                 st.markdown(just)
