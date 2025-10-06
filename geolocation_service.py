@@ -6,69 +6,30 @@ import streamlit as st
 import json
 from datetime import datetime
 
-# --- APIs ---
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# MUDANÇA AQUI: Criamos uma lista de servidores alternativos para a API Overpass
+OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://z.overpass-api.de/api/interpreter",
+]
 OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
 
-# --- BANCO DE DADOS DE CIDADES DO AGRO ---
-# Esta é a nossa nova base de dados interna com as coordenadas das principais cidades.
-# Foi expandida para incluir as maiores potências do agro listadas anteriormente.
+# --- Constantes ---
 HUBS_AGRO = {
-    # Titãs do Mato Grosso
-    "Sorriso (MT)": (-12.5447, -55.7126),
-    "Sapezal (MT)": (-13.5428, -58.8744),
-    "Campo Novo do Parecis (MT)": (-13.6744, -57.8894),
-    "Diamantino (MT)": (-14.4086, -56.4458),
-    "Nova Ubiratã (MT)": (-12.9869, -55.2533),
-    "Nova Mutum (MT)": (-13.8291, -56.0822),
-    "Querência (MT)": (-12.6042, -52.1939),
-    "Primavera do Leste (MT)": (-15.5597, -54.2958),
-    "Lucas do Rio Verde (MT)": (-13.0531, -55.9083),
-    
-    # Potências do MATOPIBA
-    "São Desidério (BA)": (-12.3619, -44.9731),
-    "Formosa do Rio Preto (BA)": (-11.0483, -45.1928),
-    "Correntina (BA)": (-13.3431, -44.6372),
-    "Luís Eduardo Magalhães (BA)": (-12.0919, -45.8019),
-    "Balsas (MA)": (-7.5325, -46.0356),
-    "Uruçuí (PI)": (-7.2294, -44.5583),
-    "Bom Jesus (PI)": (-9.0744, -44.3592),
-
-    # Gigantes de Goiás e Minas Gerais
-    "Rio Verde (GO)": (-17.7972, -50.9262),
-    "Jataí (GO)": (-17.8814, -51.7144),
-    "Cristalina (GO)": (-16.7686, -47.6144),
-    "Unaí (MG)": (-16.3575, -46.9061),
-    "Uberlândia (MG)": (-18.9186, -48.2772),
-    "Uberaba (MG)": (-19.7483, -47.9319),
-    "Paracatu (MG)": (-17.2219, -46.8753),
-
-    # Forças do Mato Grosso do Sul
-    "Maracaju (MS)": (-21.6144, -55.1683),
-    "Ponta Porã (MS)": (-22.5361, -55.7256),
-    "Dourados (MS)": (-22.2211, -54.8056),
-    "Sidrolândia (MS)": (-20.9319, -54.9608),
-
-    # Destaques do Sul (Paraná e Rio Grande do Sul)
-    "Cascavel (PR)": (-24.9555, -53.4552),
-    "Tibagi (PR)": (-24.5103, -50.4158),
-    "Guarapuava (PR)": (-25.3947, -51.4578),
-    "Tupanciretã (RS)": (-29.0836, -53.8436),
-    
-    # Referência em São Paulo e Porto
-    "Piracicaba (SP)": (-22.7253, -47.6492),
-    "Porto de Santos (SP)": (-23.9882, -46.3095)
+    "Rio Verde (GO)": (-17.7972, -50.9262), "Goiânia (GO)": (-16.6869, -49.2648),
+    "Rondonópolis (MT)": (-16.4705, -54.636), "Sorriso (MT)": (-12.5447, -55.7126),
+    "Uberlândia (MG)": (-18.9186, -48.2772), "Cascavel (PR)": (-24.9555, -53.4552),
+    "Campinas (SP)": (-22.9068, -47.0616), "Porto de Santos (SP)": (-23.9882, -46.3095)
 }
-
 
 # --- Funções de Lógica ---
 
 def get_distance(coord1, coord2):
     return geodesic(coord1, coord2).kilometers
 
-# A função get_clima_data continua exatamente a mesma
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_clima_data(lat, lon):
+    # ... (Esta função permanece igual) ...
     ano_atual = datetime.now().year
     start_date = f"{ano_atual - 31}-01-01"
     end_date = f"{ano_atual - 1}-12-31"
@@ -97,7 +58,6 @@ def get_clima_data(lat, lon):
         st.error(f"Não foi possível buscar os dados de clima. Erro: {e}")
         return None
 
-# A função find_all_nearest_pois continua exatamente a mesma
 @st.cache_data(show_spinner=False, ttl=3600)
 def find_all_nearest_pois(lat, lon, return_coords=False):
     raio_rodovia_m = 100 * 1000
@@ -115,46 +75,59 @@ def find_all_nearest_pois(lat, lon, return_coords=False):
     );
     out center;
     """
-    results = {
-        "rodovia": {"nome": "Não encontrada", "distancia": raio_rodovia_m / 1000, "coords": None},
-        "cidade": {"nome": "Não encontrada", "distancia": raio_local_m / 1000, "coords": None},
-        "silo": {"nome": "Não encontrado", "distancia": raio_local_m / 1000, "coords": None}
-    }
-    try:
-        response = requests.post(OVERPASS_URL, data=query_combinada, timeout=60)
-        response.raise_for_status()
-        data = response.json()
-        if not data['elements']: return results
-        farm_coords = (lat, lon)
-        min_dists = {"rodovia": float('inf'), "cidade": float('inf'), "silo": float('inf')}
-        for element in data['elements']:
-            tags = element.get('tags', {})
-            name = tags.get('name', 'Silo/Armazém')
-            if 'center' in element: poi_coords = (element['center']['lat'], element['center']['lon'])
-            else: poi_coords = (element['lat'], element['lon'])
-            dist = get_distance(farm_coords, poi_coords)
-            if "highway" in tags:
-                if dist < min_dists["rodovia"]:
-                    min_dists["rodovia"] = dist
-                    results["rodovia"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
-            elif "place" in tags:
-                if dist < min_dists["cidade"]:
-                    min_dists["cidade"] = dist
-                    results["cidade"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
-            elif "man_made" in tags or "Silo" in name or "Cooperativa" in name or "Graneleiro" in name:
-                if dist < min_dists["silo"]:
-                    min_dists["silo"] = dist
-                    results["silo"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
-        return results
-    except requests.exceptions.Timeout:
-        st.error("A busca de dados geográficos demorou demais (Timeout).")
-        return None
-    except Exception:
-        st.warning("Não foi possível buscar dados geográficos.")
-        return None
+    
+    # MUDANÇA AQUI: Itera sobre a lista de servidores
+    for i, endpoint in enumerate(OVERPASS_ENDPOINTS):
+        try:
+            st.toast(f"Tentando servidor de mapas {i+1}/{len(OVERPASS_ENDPOINTS)}...")
+            response = requests.post(endpoint, data=query_combinada, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Se chegamos aqui, a busca funcionou. Processamos os resultados.
+            results = {
+                "rodovia": {"nome": "Não encontrada", "distancia": raio_rodovia_m / 1000, "coords": None},
+                "cidade": {"nome": "Não encontrada", "distancia": raio_local_m / 1000, "coords": None},
+                "silo": {"nome": "Não encontrado", "distancia": raio_local_m / 1000, "coords": None}
+            }
+            if not data['elements']: return results
+            
+            farm_coords = (lat, lon)
+            min_dists = {"rodovia": float('inf'), "cidade": float('inf'), "silo": float('inf')}
+            
+            for element in data['elements']:
+                tags = element.get('tags', {})
+                name = tags.get('name', 'Silo/Armazém')
+                if 'center' in element: poi_coords = (element['center']['lat'], element['center']['lon'])
+                else: poi_coords = (element['lat'], element['lon'])
+                dist = get_distance(farm_coords, poi_coords)
+                
+                if "highway" in tags:
+                    if dist < min_dists["rodovia"]:
+                        min_dists["rodovia"] = dist
+                        results["rodovia"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
+                elif "place" in tags:
+                    if dist < min_dists["cidade"]:
+                        min_dists["cidade"] = dist
+                        results["cidade"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
+                elif "man_made" in tags or "Silo" in name or "Cooperativa" in name or "Graneleiro" in name:
+                    if dist < min_dists["silo"]:
+                        min_dists["silo"] = dist
+                        results["silo"] = {"nome": name, "distancia": round(dist, 1), "coords": poi_coords if return_coords else None}
+            
+            return results # Retorna o sucesso e sai do loop
 
-# A função find_nearest_hub continua exatamente a mesma
+        except (requests.exceptions.Timeout, requests.exceptions.HTTPError, json.JSONDecodeError) as e:
+            # Se um servidor falhar, avisa e continua para o próximo
+            st.toast(f"Servidor {i+1} falhou. Erro: {e.__class__.__name__}. Tentando o próximo...")
+            continue # Pula para a próxima iteração do loop
+    
+    # Se todos os servidores da lista falharem, exibe o erro final
+    st.error("Todos os servidores de mapas falharam em responder. Tente novamente mais tarde.")
+    return None
+
 def find_nearest_hub(lat, lon):
+    # ... (Esta função continua exatamente igual) ...
     farm_coords = (lat, lon)
     min_dist = float('inf')
     nearest_hub = None
