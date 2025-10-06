@@ -22,14 +22,12 @@ with st.sidebar:
     latitude = st.number_input("Latitude da Sede", value=-16.6869, format="%.6f")
     longitude = st.number_input("Longitude da Sede", value=-49.2648, format="%.6f")
 
-    # Os campos de distância agora são apenas para exibição e ajuste manual
     st.subheader("1. Logística (Peso: {}%)".format(int(PESOS['logistica']*100)))
     st.info("As distâncias serão calculadas automaticamente ao clicar em 'Analisar'.")
     
     dist_asfalto_km = st.number_input("Distância da Rodovia (km)", min_value=0.0, value=25.0, key="dist_rodovia")
     dist_silo_km = st.number_input("Distância do Armazém Graneleiro (km)", min_value=0.0, value=60.0, key="dist_silo")
 
-    # O restante dos inputs continua igual
     st.subheader("2. Legal e Ambiental (Peso: {}%)".format(int(PESOS['legal_ambiental']*100)))
     situacao_reserva_legal = st.selectbox("Situação da Reserva Legal (CAR)", ['Averbada e regular', 'Averbada, mas precisa de averiguação', 'Pendente com passivo'])
     possui_geo_sigef = st.checkbox("Possui Georreferenciamento (SIGEF)?", value=True)
@@ -42,22 +40,18 @@ with st.sidebar:
     st.subheader("5. Topografia (Peso: {}%)".format(int(PESOS['topografia']*100)))
     percentual_mecanizavel = st.slider("Área Mecanizável da Fazenda (%)", 0, 100, 85)
 
-    # Botão ÚNICO de ação
     analisar = st.button("Analisar Viabilidade", type="primary")
 
 # --- Painel Principal de Resultados ---
 if analisar:
-    # Passo 1: Realizar a busca geográfica PRIMEIRO
     with st.spinner("Buscando dados geográficos e logísticos..."):
         all_pois = find_all_nearest_pois(latitude, longitude, return_coords=True)
         hub = find_nearest_hub(latitude, longitude)
     
     if all_pois and hub:
-        # Atualiza os valores na interface com os dados encontrados
         st.session_state.dist_rodovia = all_pois['rodovia']['distancia']
         st.session_state.dist_silo = all_pois['silo']['distancia']
         
-        # Passo 2: Coletar os dados (incluindo os recém-buscados) para a análise
         dados_fazenda = {
             'dist_asfalto_km': st.session_state.dist_rodovia, 
             'dist_silo_km': st.session_state.dist_silo,
@@ -67,10 +61,8 @@ if analisar:
             'percentual_mecanizavel': percentual_mecanizavel
         }
         
-        # Passo 3: Calcular o score
         indice_final, scores_detalhados, classe, desc_classe = calcular_indice_viabilidade(dados_fazenda)
         
-        # Passo 4: Exibir os resultados
         st.header(f"Resultados da Análise: {nome_fazenda}")
         tab1, tab2, tab3 = st.tabs(["📊 Resumo Geral", "🗺️ Detalhes Geográficos", "⚖️ Justificativa dos Pesos"])
 
@@ -94,42 +86,37 @@ if analisar:
             farm_coords = (latitude, longitude)
             m = folium.Map(location=farm_coords, zoom_start=9)
             
-            # Marcador da Fazenda
             folium.Marker(farm_coords, popup=f"📍 **{nome_fazenda}**", 
                           tooltip="Local da Fazenda", icon=folium.Icon(color='blue', icon='home', prefix='fa')).add_to(m)
 
-            # Marcador e Linha para Polo Agro (Cidade de Referência) - Cor Roxo
             if hub and hub['coords']:
                 folium.Marker(hub['coords'], popup=f"🏭 **Polo Agro**: {hub['nome']} ({hub['distancia']:.1f} km)",
                               tooltip="Polo Agro Mais Próximo", icon=folium.Icon(color='purple', icon='star', prefix='fa')).add_to(m)
                 folium.PolyLine(locations=[farm_coords, hub['coords']], color='purple', weight=3, opacity=0.8,
                                 tooltip=f"Distância ao Polo: {hub['distancia']:.1f} km").add_to(m)
 
-            # Marcador e Linha para Silo/Graneleiro - Cor Amarela
             if all_pois['silo']['coords']:
                 folium.Marker(all_pois['silo']['coords'], popup=f"📦 **Armazém/Silo**: {all_pois['silo']['nome']} ({all_pois['silo']['distancia']:.1f} km)",
                               tooltip="Armazém/Silo Mais Próximo", icon=folium.Icon(color='orange', icon='industry', prefix='fa')).add_to(m)
                 folium.PolyLine(locations=[farm_coords, all_pois['silo']['coords']], color='yellow', weight=3, opacity=0.8,
                                 tooltip=f"Distância ao Armazém: {all_pois['silo']['distancia']:.1f} km").add_to(m)
 
-            # Marcador e Linha para Rodovia - Cor Laranja Escuro
             if all_pois['rodovia']['coords']:
                 folium.Marker(all_pois['rodovia']['coords'], popup=f"🛣️ **Rodovia**: {all_pois['rodovia']['nome']} ({all_pois['rodovia']['distancia']:.1f} km)",
                               tooltip="Rodovia Mais Próxima", icon=folium.Icon(color='red', icon='road', prefix='fa')).add_to(m)
                 folium.PolyLine(locations=[farm_coords, all_pois['rodovia']['coords']], color='darkorange', weight=3, opacity=0.8,
                                 tooltip=f"Distância à Rodovia: {all_pois['rodovia']['distancia']:.1f} km").add_to(m)
 
-            # Marcador e Linha para Cidade Próxima - Cor Cinza
             if all_pois['cidade']['coords']:
                 folium.Marker(all_pois['cidade']['coords'], popup=f"🏙️ **Cidade**: {all_pois['cidade']['nome']} ({all_pois['cidade']['distancia']:.1f} km)",
                               tooltip="Cidade Mais Próxima", icon=folium.Icon(color='lightgray', icon='building', prefix='fa')).add_to(m)
                 folium.PolyLine(locations=[farm_coords, all_pois['cidade']['coords']], color='gray', weight=3, opacity=0.8,
                                 tooltip=f"Distância à Cidade: {all_pois['cidade']['distancia']:.1f} km").add_to(m)
             
-            # AUMENTANDO O TAMANHO DO MAPA
             folium_static(m, width=950, height=600)
 
             st.markdown("#### Distâncias Calculadas:")
+            # CORREÇÃO APLICADA NESTAS 4 LINHAS ABAIXO
             st.success(f"🛣️ **Rodovia mais próxima:** Aprox. **{all_pois['rodovia']['distancia']:.1f} km**")
             st.success(f"🏙️ **Cidade/Vila mais próxima:** {all_pois['cidade']['nome']} (aprox. **{all_pois['cidade']['distancia']:.1f} km**)")
-            st.success(f"📦 **Armazém/Silo mais próximo:** {all_pois['silo']['nome']} (aprox. **
+            st.success(f"📦 **Armazém/
