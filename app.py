@@ -33,16 +33,12 @@ with st.sidebar:
     # Usamos o st.session_state para guardar os valores encontrados
     dist_asfalto_km = st.number_input("Distância da Rodovia (km)",
     min_value=0.0,
-    value=float(st.session_state.get('pois', {}).get('rodovia', {}).get('distancia', 25.0)) # MUDANÇA AQUI
+    value=float(st.session_state.get('pois', {}).get('rodovia', {}).get('distancia', 25.0))
 )
 dist_silo_km = st.number_input(
     "Distância do Armazém (km)",
     min_value=0.0,
-    value=float(st.session_state.get('pois', {}).get('armazem', {}).get('distancia', 60.0)) # MUDANÇA AQUI
-)
-Adicionei a função float() em volta do value para garantir que, independentemente do que venha do session_state, ele será convertido para um número float, combinando com o min_value=0.0.
-
-    # O restante dos inputs continua igual
+    value=float(st.session_state.get('pois', {}).get('armazem', {}).get('distancia', 60.0))
     st.subheader("2. Legal e Ambiental (Peso: {}%)".format(int(PESOS['legal_ambiental']*100)))
     situacao_reserva_legal = st.selectbox("Situação da Reserva Legal (CAR)", ['Averbada e regular', 'Averbada, mas precisa de averiguação', 'Pendente com passivo'])
     possui_geo_sigef = st.checkbox("Possui Georreferenciamento (SIGEF)?", value=True)
