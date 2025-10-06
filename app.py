@@ -8,18 +8,18 @@ from scoring_engine import calcular_indice_viabilidade, PESOS, JUSTIFICATIVAS_PE
 from geolocation_service import find_all_nearest_pois, find_nearest_hub, get_clima_data
 
 # --- Configuração da Página ---
-st.set_page_config(page_title="AgroScore Validator 4.3", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="AgroScore Validator 4.4", page_icon="🛰️", layout="wide")
 
 # --- Título e Descrição ---
-st.title("🛰️ AgroScore Validator 4.3")
-st.markdown("Plataforma com **análise climática e logística automáticas**. Preencha os dados e clique em 'Analisar Viabilidade' para um diagnóstico completo.")
+st.title("🛰️ AgroScore Validator 4.4")
+st.markdown("Plataforma com **análise de contexto regional**, correlacionando a fazenda com os principais polos do agronegócio.")
 
 # --- Barra Lateral de Entradas (Inputs) ---
 with st.sidebar:
     st.header("Dados de Entrada da Propriedade")
     nome_fazenda = st.text_input("Nome da Fazenda", "Fazenda Boa Esperança")
-    latitude = st.number_input("Latitude da Sede", value=-16.6869, format="%.6f")
-    longitude = st.number_input("Longitude da Sede", value=-49.2648, format="%.6f")
+    latitude = st.number_input("Latitude da Sede", value=-17.79, format="%.6f") # Coordenadas perto de Rio Verde para exemplo
+    longitude = st.number_input("Longitude da Sede", value=-50.93, format="%.6f")
 
     st.subheader("1. Logística (Peso: {}%)".format(int(PESOS['logistica']*100)))
     st.info("As distâncias e o índice pluviométrico serão preenchidos automaticamente.")
@@ -31,7 +31,6 @@ with st.sidebar:
     possui_geo_sigef = st.checkbox("Possui Georreferenciamento (SIGEF)?", value=True)
     
     st.subheader("3. Recursos Hídricos (Peso: {}%)".format(int(PESOS['recursos_hidricos']*100)))
-    # MUDANÇA AQUI: Removemos o slider e colocamos um placeholder
     st.text_input("Índice Pluviométrico Médio Anual (mm)", "Será buscado automaticamente...", disabled=True)
     presenca_rio_perene = st.checkbox("Possui Rio Perene na propriedade?", value=True)
 
@@ -45,31 +44,23 @@ with st.sidebar:
 
 # --- Painel Principal de Resultados ---
 if analisar:
-    all_pois = None
-    hub = None
-    clima_data = None
-    with st.spinner("Buscando dados geográficos, logísticos e climáticos... (Pode levar até 1 minuto)"):
+    all_pois, hub, clima_data = None, None, None
+    with st.spinner("Buscando dados geográficos, logísticos e climáticos..."):
         all_pois = find_all_nearest_pois(latitude, longitude, return_coords=True)
         hub = find_nearest_hub(latitude, longitude)
         clima_data = get_clima_data(latitude, longitude)
 
-    # MUDANÇA AQUI: A análise só continua se os dados essenciais (clima) forem encontrados
-    if clima_data is None:
-        st.error("A análise foi interrompida porque não foi possível obter os dados de clima. Tente novamente.")
-        st.stop() # Interrompe a execução do app
+    if clima_data is None or all_pois is None or hub is None:
+        st.error("A análise foi interrompida porque não foi possível obter todos os dados automáticos. Verifique as mensagens de erro acima e tente novamente.")
+        st.stop()
 
-    dist_rodovia_final = st.session_state.dist_rodovia
-    dist_silo_final = st.session_state.dist_silo
-
-    if all_pois:
-        dist_rodovia_final = all_pois['rodovia']['distancia']
-        dist_silo_final = all_pois['silo']['distancia']
-        st.success("Busca geográfica concluída com sucesso!")
+    dist_rodovia_final = all_pois['rodovia']['distancia']
+    dist_silo_final = all_pois['silo']['distancia']
     
     dados_fazenda = {
         'dist_asfalto_km': dist_rodovia_final, 'dist_silo_km': dist_silo_final,
         'situacao_reserva_legal': situacao_reserva_legal, 'possui_geo_sigef': possui_geo_sigef,
-        'indice_pluviometrico_mm': clima_data, # Usa o dado automático
+        'indice_pluviometrico_mm': clima_data,
         'presenca_rio_perene': presenca_rio_perene,
         'ph_solo': ph_solo, 'teor_argila_percent': teor_argila_percent,
         'percentual_mecanizavel': percentual_mecanizavel
@@ -89,6 +80,12 @@ if analisar:
         with col2:
             st.subheader(f"Classificação do Ativo: {classe}")
             st.info(desc_classe)
+        
+        # MUDANÇA AQUI: Adicionamos o card de contexto regional
+        st.divider()
+        st.subheader("Contexto Regional")
+        st.info(f"📍 A fazenda está a aproximadamente **{hub['distancia']:.0f} km** do polo regional **{hub['nome']}**, um dos principais centros do agronegócio no Brasil.")
+
         st.divider()
         st.subheader("Pontuações por Categoria")
         for categoria, score in scores_detalhados.items():
@@ -96,7 +93,7 @@ if analisar:
             st.progress(int(score * 10))
             
     with tab2:
-        # ... (O mapa continua igual)
+        # O mapa continua igual, mas agora exibirá o marcador do Polo Agro
         st.subheader("Análise Geográfica e Logística")
         farm_coords = (latitude, longitude)
         m = folium.Map(location=farm_coords, zoom_start=9)
@@ -114,13 +111,6 @@ if analisar:
             folium.Marker(all_pois['cidade']['coords'], popup=f"🏙️ **Cidade**: {all_pois['cidade']['nome']} ({all_pois['cidade']['distancia']:.1f} km)", tooltip="Cidade Mais Próxima", icon=folium.Icon(color='lightgray', icon='building', prefix='fa')).add_to(m)
             folium.PolyLine(locations=[farm_coords, all_pois['cidade']['coords']], color='gray', weight=3, opacity=0.8, tooltip=f"Distância à Cidade: {all_pois['cidade']['distancia']:.1f} km").add_to(m)
         folium_static(m, width=950, height=600)
-        st.markdown("#### Distâncias Calculadas:")
-        if all_pois:
-            st.success(f"🛣️ **Rodovia mais próxima:** Aprox. **{all_pois['rodovia']['distancia']:.1f} km**")
-            st.success(f"🏙️ **Cidade/Vila mais próxima:** {all_pois['cidade']['nome']} (aprox. **{all_pois['cidade']['distancia']:.1f} km**)")
-            st.success(f"📦 **Armazém/Silo mais próximo:** {all_pois['silo']['nome']} (aprox. **{all_pois['silo']['distancia']:.1f} km**)")
-        if hub:
-            st.success(f"🏭 **Polo de Agronegócio mais próximo:** {hub['nome']} (aprox. **{hub['distancia']:.1f} km**)")
 
     with tab3:
         # ... (Esta aba continua igual)
