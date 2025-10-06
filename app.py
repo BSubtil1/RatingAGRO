@@ -20,25 +20,28 @@ with st.sidebar:
     latitude = st.number_input("Latitude da Sede", value=-16.6869, format="%.6f")
     longitude = st.number_input("Longitude da Sede", value=-49.2648, format="%.6f")
 
-    # Botão para iniciar a busca geográfica
     if st.button("Buscar Dados Geográficos", type="primary"):
         with st.spinner("Realizando busca geográfica otimizada..."):
-            # Faz uma única chamada para buscar tudo
             all_pois = find_all_nearest_pois(latitude, longitude)
             if all_pois:
                 st.session_state.pois = all_pois
                 st.session_state.hub = find_nearest_hub(latitude, longitude)
 
     st.subheader("1. Logística (Peso: {}%)".format(int(PESOS['logistica']*100)))
-    # Usamos o st.session_state para guardar os valores encontrados
-    dist_asfalto_km = st.number_input("Distância da Rodovia (km)",
-    min_value=0.0,
-    value=float(st.session_state.get('pois', {}).get('rodovia', {}).get('distancia', 25.0))
-)
-dist_silo_km = st.number_input(
-    "Distância do Armazém (km)",
-    min_value=0.0,
-    value=float(st.session_state.get('pois', {}).get('armazem', {}).get('distancia', 60.0))
+    
+    # CORREÇÃO APLICADA AQUI
+    dist_asfalto_km = st.number_input(
+        "Distância da Rodovia (km)", 
+        min_value=0.0,
+        value=float(st.session_state.get('pois', {}).get('rodovia', {}).get('distancia', 25.0))
+    )
+    dist_silo_km = st.number_input(
+        "Distância do Armazém (km)",
+        min_value=0.0, 
+        value=float(st.session_state.get('pois', {}).get('armazem', {}).get('distancia', 60.0))
+    )
+
+    # O restante dos inputs continua igual
     st.subheader("2. Legal e Ambiental (Peso: {}%)".format(int(PESOS['legal_ambiental']*100)))
     situacao_reserva_legal = st.selectbox("Situação da Reserva Legal (CAR)", ['Averbada e regular', 'Averbada, mas precisa de averiguação', 'Pendente com passivo'])
     possui_geo_sigef = st.checkbox("Possui Georreferenciamento (SIGEF)?", value=True)
@@ -86,11 +89,11 @@ if analisar:
         st.markdown("#### Distâncias Calculadas:")
         if 'pois' in st.session_state:
             pois = st.session_state.pois
-            st.success(f"🛣️ **Rodovia mais próxima:** Aprox. **{pois['rodovia']['distancia']} km**")
-            st.success(f"🏙️ **Cidade/Vila mais próxima:** {pois['cidade']['nome']} (aprox. **{pois['cidade']['distancia']} km**)")
-            st.success(f"📦 **Armazém mais próximo:** {pois['armazem']['nome']} (aprox. **{pois['armazem']['distancia']} km**)")
+            st.success(f"🛣️ **Rodovia mais próxima:** Aprox. **{pois['rodovia']['distancia']:.1f} km**")
+            st.success(f"🏙️ **Cidade/Vila mais próxima:** {pois['cidade']['nome']} (aprox. **{pois['cidade']['distancia']:.1f} km**)")
+            st.success(f"📦 **Armazém mais próximo:** {pois['armazem']['nome']} (aprox. **{pois['armazem']['distancia']:.1f} km**)")
         if 'hub' in st.session_state:
-            st.success(f"🏭 **Polo de Agronegócio mais próximo:** {st.session_state.hub['nome']} (aprox. **{st.session_state.hub['distancia']} km**)")
+            st.success(f"🏭 **Polo de Agronegócio mais próximo:** {st.session_state.hub['nome']} (aprox. **{st.session_state.hub['distancia']:.1f} km**)")
     with tab3:
         st.subheader("Argumentação Sobre os Pesos da Análise")
         st.info("A metodologia de pesos reflete a realidade do investimento em ativos rurais...")
