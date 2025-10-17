@@ -11,11 +11,11 @@ from geolocation_service import (
 )
 
 # --- Configuração da Página ---
-st.set_page_config(page_title="AgroScore Validator 5.1", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="AgroScore Validator 5.2", page_icon="🛰️", layout="wide")
 
 # --- Título e Descrição ---
-st.title("🛰️ AgroScore Validator 5.1")
-st.markdown("Plataforma com **banco de dados de rodovias integrado** e análise robusta de dados geográficos.")
+st.title("🛰️ AgroScore Validator 5.2")
+st.markdown("Plataforma com **banco de dados de rodovias integrado** para máxima confiabilidade e performance.")
 
 # --- Barra Lateral de Entradas (Inputs) ---
 with st.sidebar:
@@ -25,7 +25,7 @@ with st.sidebar:
     longitude = st.number_input("Longitude da Sede", value=-50.93, format="%.6f")
 
     st.subheader("1. Logística (Peso: {}%)".format(int(PESOS['logistica']*100)))
-    st.info("Todos os dados de Logística, Clima e Solo serão preenchidos automaticamente.")
+    st.info("Todos os dados serão preenchidos automaticamente.")
     st.text_input("Distância da Rodovia Pavimentada (km)", "Automático...", disabled=True)
     st.text_input("Distância do Armazém Graneleiro (km)", "Automático...", disabled=True)
     
@@ -46,14 +46,13 @@ with st.sidebar:
 # --- Painel Principal de Resultados ---
 if analisar:
     with st.spinner("Buscando e processando dados..."):
-        highway_success, highway_data = find_nearest_highway_from_db(latitude, longitude)
+        highway_success, highway_data = find_nearest_highway_from_db(latitude, longitude) # Busca 100% offline
         pois_success, local_pois = find_local_pois(latitude, longitude, return_coords=True)
         hub_success, hub = find_nearest_hub(latitude, longitude)
         clima_success, clima_data = get_clima_data(latitude, longitude)
         soil_success, soil_data = get_soil_data(latitude, longitude)
 
-    # A análise de solo não interrompe mais, mas as outras sim, se falharem.
-    if not all([clima_success, pois_success, hub_success, highway_success]):
+    if not all([clima_success, pois_success, hub_success, highway_success, soil_success]):
         st.error("A análise foi interrompida. Verifique as mensagens de erro e tente novamente:")
         if not highway_success: st.warning(f"Rodovias: {highway_data}")
         if not pois_success: st.warning(f"Logística Local: {local_pois}")
@@ -62,13 +61,11 @@ if analisar:
     
     st.success("Busca de dados automáticos concluída com sucesso!")
 
-    # CORREÇÃO APLICADA AQUI: Garantindo que todas as chaves estão corretas
     dados_fazenda = {
         'dist_asfalto_km': highway_data['distancia'], 
         'dist_silo_km': local_pois['silo']['distancia'],
-        'situacao_reserva_legal': situacao_reserva_legal, 
-        'possui_geo_sigef': possui_geo_sigef,
-        'indice_pluviometrico_mm': clima_data,
+        'situacao_reserva_legal': situacao_reserva_legal, 'possui_geo_sigef': possui_geo_sigef,
+        'indice_pluviometric_mm': clima_data,
         'presenca_rio_perene': presenca_rio_perene,
         'ph_solo': soil_data['ph'],
         'teor_argila_percent': soil_data['clay'],
