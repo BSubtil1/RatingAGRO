@@ -15,11 +15,10 @@ st.set_page_config(page_title="AgroScore Validator 5.1", page_icon="🛰️", la
 
 # --- Título e Descrição ---
 st.title("🛰️ AgroScore Validator 5.1")
-st.markdown("Plataforma com **análise de dados robusta** e fallback inteligente para dados de solo.")
+st.markdown("Plataforma com **banco de dados de rodovias integrado** para máxima confiabilidade e performance.")
 
 # --- Barra Lateral de Entradas (Inputs) ---
 with st.sidebar:
-    # ... (toda a barra lateral continua igual)
     st.header("Dados de Entrada da Propriedade")
     nome_fazenda = st.text_input("Nome da Fazenda", "Fazenda Boa Esperança")
     latitude = st.number_input("Latitude da Sede", value=-17.79, format="%.6f")
@@ -51,7 +50,7 @@ if analisar:
         pois_success, local_pois = find_local_pois(latitude, longitude, return_coords=True)
         hub_success, hub = find_nearest_hub(latitude, longitude)
         clima_success, clima_data = get_clima_data(latitude, longitude)
-        soil_success, soil_data = get_soil_data(latitude, longitude) # soil_success será sempre True agora
+        soil_success, soil_data = get_soil_data(latitude, longitude)
 
     # A análise de solo não interrompe mais, mas as outras sim, se falharem.
     if not all([clima_success, pois_success, hub_success, highway_success]):
@@ -67,7 +66,7 @@ if analisar:
         'dist_asfalto_km': highway_data['distancia'], 
         'dist_silo_km': local_pois['silo']['distancia'],
         'situacao_reserva_legal': situacao_reserva_legal, 'possui_geo_sigef': possui_geo_sigef,
-        'indice_pluviometrico_mm': clima_data,
+        'indice_pluviometric_mm': clima_data,
         'presenca_rio_perene': presenca_rio_perene,
         'ph_solo': soil_data['ph'],
         'teor_argila_percent': soil_data['clay'],
