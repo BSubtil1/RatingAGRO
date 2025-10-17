@@ -15,7 +15,7 @@ st.set_page_config(page_title="AgroScore Validator 5.1", page_icon="🛰️", la
 
 # --- Título e Descrição ---
 st.title("🛰️ AgroScore Validator 5.1")
-st.markdown("Plataforma com **banco de dados de rodovias integrado** para máxima confiabilidade e performance.")
+st.markdown("Plataforma com **banco de dados de rodovias integrado** e análise robusta de dados geográficos.")
 
 # --- Barra Lateral de Entradas (Inputs) ---
 with st.sidebar:
@@ -25,7 +25,7 @@ with st.sidebar:
     longitude = st.number_input("Longitude da Sede", value=-50.93, format="%.6f")
 
     st.subheader("1. Logística (Peso: {}%)".format(int(PESOS['logistica']*100)))
-    st.info("Todos os dados serão preenchidos automaticamente.")
+    st.info("Todos os dados de Logística, Clima e Solo serão preenchidos automaticamente.")
     st.text_input("Distância da Rodovia Pavimentada (km)", "Automático...", disabled=True)
     st.text_input("Distância do Armazém Graneleiro (km)", "Automático...", disabled=True)
     
@@ -62,11 +62,13 @@ if analisar:
     
     st.success("Busca de dados automáticos concluída com sucesso!")
 
+    # CORREÇÃO APLICADA AQUI: Garantindo que todas as chaves estão corretas
     dados_fazenda = {
         'dist_asfalto_km': highway_data['distancia'], 
         'dist_silo_km': local_pois['silo']['distancia'],
-        'situacao_reserva_legal': situacao_reserva_legal, 'possui_geo_sigef': possui_geo_sigef,
-        'indice_pluviometric_mm': clima_data,
+        'situacao_reserva_legal': situacao_reserva_legal, 
+        'possui_geo_sigef': possui_geo_sigef,
+        'indice_pluviometrico_mm': clima_data,
         'presenca_rio_perene': presenca_rio_perene,
         'ph_solo': soil_data['ph'],
         'teor_argila_percent': soil_data['clay'],
