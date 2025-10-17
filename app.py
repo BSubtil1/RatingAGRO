@@ -11,7 +11,7 @@ from geolocation_service import find_all_nearest_pois, find_nearest_hub, get_cli
 st.set_page_config(page_title="AgroScore Validator 4.6", page_icon="🛰️", layout="wide")
 
 # --- Título e Descrição ---
-st.title("🛰️ AgroScore Validator 4.6")
+st.title("🛰️ AgroScore do BRUNÃO Validator 4.6")
 st.markdown("Plataforma com **análise de solo, clima e logística automáticas**.")
 
 # --- Barra Lateral de Entradas (Inputs) ---
