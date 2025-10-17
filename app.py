@@ -11,14 +11,15 @@ from geolocation_service import (
 )
 
 # --- Configuração da Página ---
-st.set_page_config(page_title="AgroScore Validator 5.0", page_icon="🛰️", layout="wide")
+st.set_page_config(page_title="AgroScore Validator 5.1", page_icon="🛰️", layout="wide")
 
 # --- Título e Descrição ---
-st.title("🛰️ AgroScore Validator 5.0")
-st.markdown("Plataforma com **banco de dados de rodovias integrado** para máxima confiabilidade e performance.")
+st.title("🛰️ AgroScore Validator 5.1")
+st.markdown("Plataforma com **análise de dados robusta** e fallback inteligente para dados de solo.")
 
 # --- Barra Lateral de Entradas (Inputs) ---
 with st.sidebar:
+    # ... (toda a barra lateral continua igual)
     st.header("Dados de Entrada da Propriedade")
     nome_fazenda = st.text_input("Nome da Fazenda", "Fazenda Boa Esperança")
     latitude = st.number_input("Latitude da Sede", value=-17.79, format="%.6f")
@@ -29,7 +30,6 @@ with st.sidebar:
     st.text_input("Distância da Rodovia Pavimentada (km)", "Automático...", disabled=True)
     st.text_input("Distância do Armazém Graneleiro (km)", "Automático...", disabled=True)
     
-    # ... (restante dos inputs na sidebar)
     st.subheader("2. Legal e Ambiental (Peso: {}%)".format(int(PESOS['legal_ambiental']*100)))
     situacao_reserva_legal = st.selectbox("Situação da Reserva Legal (CAR)", ['Averbada e regular', 'Averbada, mas precisa de averiguação', 'Pendente com passivo'])
     possui_geo_sigef = st.checkbox("Possui Georreferenciamento (SIGEF)?", value=True)
@@ -51,14 +51,14 @@ if analisar:
         pois_success, local_pois = find_local_pois(latitude, longitude, return_coords=True)
         hub_success, hub = find_nearest_hub(latitude, longitude)
         clima_success, clima_data = get_clima_data(latitude, longitude)
-        soil_success, soil_data = get_soil_data(latitude, longitude)
+        soil_success, soil_data = get_soil_data(latitude, longitude) # soil_success será sempre True agora
 
-    if not all([clima_success, pois_success, hub_success, soil_success, highway_success]):
+    # A análise de solo não interrompe mais, mas as outras sim, se falharem.
+    if not all([clima_success, pois_success, hub_success, highway_success]):
         st.error("A análise foi interrompida. Verifique as mensagens de erro e tente novamente:")
         if not highway_success: st.warning(f"Rodovias: {highway_data}")
         if not pois_success: st.warning(f"Logística Local: {local_pois}")
         if not clima_success: st.warning(f"Clima: {clima_data}")
-        if not soil_success: st.warning(f"Solo: {soil_data}")
         st.stop()
     
     st.success("Busca de dados automáticos concluída com sucesso!")
@@ -80,7 +80,6 @@ if analisar:
     tab1, tab2, tab3 = st.tabs(["📊 Resumo Geral", "🗺️ Detalhes Geográficos", "⚖️ Justificativa dos Pesos"])
 
     with tab1:
-        # ... (conteúdo da aba 1)
         st.subheader("Compilado da Avaliação")
         col1, col2, col3 = st.columns(3)
         with col1: st.metric(label="Índice de Viabilidade Final", value=f"{indice_final:.2f} / 10")
@@ -116,7 +115,6 @@ if analisar:
         folium_static(m, width=950, height=600)
 
     with tab3:
-        # ... (conteúdo da aba 3)
         st.subheader("Argumentação Sobre os Pesos da Análise")
         for categoria, just in JUSTIFICATIVAS_PESOS.items():
             with st.expander(f"**{categoria.replace('_', ' ').title()} (Peso: {int(PESOS[categoria]*100)}%)**"):
