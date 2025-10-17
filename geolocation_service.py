@@ -129,4 +129,9 @@ def find_nearest_hub(lat, lon):
     farm_coords = (lat, lon)
     min_dist, nearest_hub = float('inf'), None
     for hub_name, coords in HUBS_AGRO.items():
-        dist = get
+        # AQUI ESTAVA O ERRO - A LINHA ESTAVA INCOMPLETA.
+        dist = get_distance(farm_coords, coords)
+        if dist < min_dist:
+            min_dist = dist
+            nearest_hub = {"nome": hub_name, "distancia": round(dist, 1), "coords": coords}
+    return True, nearest_hub
