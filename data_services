@@ -1,0 +1,30 @@
+data_services/__init__.py
+
+# data_services/rodovias.py
+import streamlit as st
+from geopy.distance import geodesic
+
+RODOVIAS_DB = {
+    "BR-153 (Transbrasiliana)": [(-16.68, -49.25), (-17.73, -49.24), (-18.52, -49.19)],
+    "BR-060 (Brasília-MS)": [(-16.68, -49.25), (-17.79, -50.93)],
+    "BR-364 (Sudeste-Noroeste)": [(-17.88, -51.71), (-16.33, -54.69)],
+    "BR-163 (Cuiabá-Santarém)": [(-15.60, -56.09), (-12.54, -55.71)],
+    "GO-070": [(-16.68, -49.25), (-16.20, -51.22)],
+    "GO-164": [(-18.44, -50.45), (-17.79, -50.93)],
+}
+
+def get_distance(coord1, coord2):
+    return geodesic(coord1, coord2).kilometers
+
+@st.cache_data
+def find_nearest_highway_from_db(lat, lon):
+    farm_coords = (lat, lon)
+    min_dist = float('inf')
+    nearest_highway_info = {"nome": "Nenhuma rodovia encontrada", "distancia": 999, "coords": None}
+    for highway_name, points in RODOVIAS_DB.items():
+        for point_coords in points:
+            dist = get_distance(farm_coords, point_coords)
+            if dist < min_dist:
+                min_dist = dist
+                nearest_highway_info = {"nome": highway_name, "distancia": round(dist, 1), "coords": point_coords}
+    return True, nearest_highway_info
